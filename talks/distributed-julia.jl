@@ -18,12 +18,79 @@ a shared memory model. (Multiplexing applies to a single process, so their is no
 """
 
 ## Asynchronous
+"""
+- Create three request generators.
+- The generators send messages to main process at random intervals via a Channel.
+- The "server" handles the messages in tasks that sleep for the requested time
 
+"""
+using Dates
+
+struct Server
+    chnl::Channel{Request}
+    max_tasks::Int64
+end
+
+function run(server::Server)
+    while true
+        req = take!(server.chnl)
+        @async run(req)
+    end
+end
+
+struct Generator
+    n::Int64
+    max_requests::Int64
+end
+
+Base.count(gen::Generator) = gen.n
+Base.size(gen::Generator) = gen.max_requests
+function increment!(gen::Generator)
+    gen.n += 1
+end
+
+function run(gen::Generator, chnl{Request}::Channel)
+    while count(gen) < size(gen)
+        sleep(rand())
+        req = Request(gen.id, rand())
+        put!(chnl, req)
+        increment!(gen)
+    end
+end
+
+struct Request
+    sender::Int64
+    duration::Float64
+end
+
+sender(req::Request) = req.sender
+duration(req::Request) = req.duration
+
+function run(req::Request)
+    println("[$(now())] Request from $(sender(req)) started (duration=$(duration(req))).")
+    sleep(duration(req))
+    println("[$(now())] Request from $(sender(req)) finished.")
+end
+
+
+# TODO: Make a new type of generator that makes server print out timestamps every N seconds.
+
+
+using Test
+
+req = Request(1, 1.125)
+run(req)
 
 ## Mutli-threading
-
+"""
+An idea here would be 
+"""
 
 ## Multi-processing
+"""
+An idea here would be to make a process pool that accepts "jobs". When a job arrives, it runs that
+job on available process.
+"""
 
 ### Low-level
 """
