@@ -5,7 +5,7 @@ There are three types of "distributed" programming made available in Julia:
 
 1. Multi-processing
 2. Multi-threading
-3. Asynchronous Programming (tasks/coroutines)
+3. Asynchronous ("Concurrent") Programming (tasks/coroutines)
 
 These correspond to:
 
@@ -18,101 +18,76 @@ a shared memory model. (Multiplexing applies to a single process, so their is no
 """
 
 ## Asynchronous
-"""
-- Create three request generators.
-- The generators send messages to main process at random intervals via a Channel.
-- The "server" handles the messages in tasks that sleep for the requested time
-
-"""
-
-
-using Dates
-
-MAX_WAITTIME = 5.0
-MAX_DURATION = 3.0
-
-struct Request
-    sender::Int64
-    duration::Float64
+function do_something(t)
+    println("Starting to wait.")
+    sleep(5) # stops execution
+    print("Done.")
 end
 
-sender(req::Request) = req.sender
-duration(req::Request) = req.duration
+t = @task do_something(3) # create task
+schedule(t) # start task
+wait(t) # wait for task to finish (interrupts the calling task/process)
+@async do_something(3) # create-and-start task
 
-function run(req::Request)
-    println("[$(now())] Request from $(sender(req)) started (duration=$(duration(req))).")
-    sleep(duration(req))
-    println("[$(now())] Request from $(sender(req)) finished.")
+function producer(c::Channel)
+    put!(c, "start")
+    for n = 1:4
+        put!(c, 2n)
+    end
+    put!(c, "stop")
 end
 
-mutable struct Generator
-    n::Int64
-    max_requests::Int64
+chnl = Channel(producer) # create a channel with a task running producer bound to it
+# i.e., something like chnl = Channel(); @async producer(chnl)
+take!(chnl) # block until a value is available
+# this is bit confusing because the channel always seems to have just one value
+# available. So the task is pausing between calls to take!? Yes—this is because 
+# chnl is unbuffered, i.e., a Channel(0), which means that put! calls block until
+# a take! is received
+
+# can use in for loop!
+for val in Channel(producer)
+    println(val)
 end
 
-Generator() = Generator(0, 6)
+# errormonitor(task) # print to stderr if task fails (is this really useful? there is already a stacktrace printed to stderr in this case, so this is a duplicate other than the ERROR: bit)
 
-Base.count(gen::Generator) = gen.n
-Base.size(gen::Generator) = gen.max_requests
-function increment!(gen::Generator)
-    gen.n += 1
-end
+# - if channel is empty, readers block until an item becomes available
+# - if channel is full, writers block until space becomes available
+# - isready
+# - Channel starts open; use `close` to close it. You can continue emptying the channel.  
+# - fetch retrieves values without removing them
+# - yieldto(task, value) is the only primitive needed to switch between tasks!
+# - current_task, istaskdone, istaskstarted, task_local_storage
+# - "Most task switches occur as a result of waiting for events such as I/O requests, and are performed by a scheduler included in Julia Base."
 
-function run(gen::Generator, chnl::Channel{Request})
-    while count(gen) < size(gen)
-        sleep(MAX_WAITTIME * rand())
-        req = Request(rand(1:4896), MAX_DURATION * rand())
-        put!(chnl, req)
-        increment!(gen)
+function do_work(task_id)
+    for job_id in jobs
+        println("[$(time())] Starting job $job_id on task $task_id")
+        sleep(3.0)
+        println("[$(time())] Finished job $job_id on task $task_id")
     end
 end
 
-function run(gen::Generator)
-    while count(gen) < size(gen)
-        sleep(MAX_WAITTIME * rand())
-        req = Request(rand(1:4896), MAX_DURATION * rand())
-        @async run(req)
-        increment!(gen)
-    end
+const jobs = Channel{Int}(32)
+
+for job_id in 1:12
+    put!(jobs, job_id)
 end
 
-struct Server
-    chnl::Channel{Request}
-    max_tasks::Int64
-end
-
-function run(server::Server)
-    while true
-        req = take!(server.chnl)
-        @async run(req)
-    end
+for task_id in 1:3
+    @async do_work(task_id)
 end
 
 
-# TODO: Make a new type of generator that makes server print out timestamps every N seconds.
+# Example
 
-# generator = Generator()
-# run(generator)
-
-chnl = Channel{Request}(32)
-
-server = Server(chnl, 128)
-Threads.@spawn run(server)
-
-generator = Generator()
-Threads.@spawn run(generator, chnl)
 
 
 ## Mutli-threading
-"""
-An idea here would be 
-"""
+
 
 ## Multi-processing
-"""
-An idea here would be to make a process pool that accepts "jobs". When a job arrives, it runs that
-job on available process.
-"""
 
 ### Low-level
 """
@@ -171,6 +146,6 @@ pmap(f, x...) # apply f to each value of array x
 
 
 ## External Packages
-- Dagger.jl
-- CUDA.jl
-- Metal.jl
+-Dagger.jl
+-CUDA.jl
+-Metal.jl
