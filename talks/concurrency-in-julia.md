@@ -1,4 +1,6 @@
 # Concurrent Julia
+
+## Introduction
 Julia prides itself on being a language that excels in terms of both development time and runtime. Researchers can write code that runs fast with minimal effort. One reason that Julia is fast for development is that there are few choices to make when it comes time to selecting packages, and, in many cases, no package is required because the Julia development team has prioritizes, builds and includes essential functionality for research developers in `Base`.
 
 Parallel programming is a case-in-point. The term "parallel programming" encompasses a wide range. Julia supports three classical parallel programming paradigms  "out-of-the-box", while the Julia ecosystem provides tightly-integrated support for recent advances, e.g., accelerators and GPUs.
@@ -149,7 +151,7 @@ In Julia, *you* are responsible for ensuring programs are data-race free! Julia 
 - `Threads.@spawn` - like @async, but with threads running task
     - Multiple tasks can use the same thread!
 
-# Threads
+## Threads
 - -p 2 -t 2 means two workers with two threads on each process
     - Use addprocs and pass -t as exeflags for fine-grained control
 - Interactive threads?
@@ -157,7 +159,7 @@ In Julia, *you* are responsible for ensuring programs are data-race free! Julia 
 - `Threads.@spawn` - like @async, but with threads running task
     - Multiple tasks can use the same thread!
 
-## Data-race conditions
+### Data-race conditions
 - You are responsible for ensuring program is data-race free!
 - Julia Channels are thread-safe => may be used to communicate safely betwen threads
 - `ReentrantLock` provides a mechanism for safely accessing and modifying data that is used by multiple threads
