@@ -1,21 +1,6 @@
 # Distributed Julia
 
-"""
-There are three types of "distributed" programming made available in Julia:
 
-1. Multi-processing
-2. Multi-threading
-3. Asynchronous ("Concurrent") Programming (tasks/coroutines)
-
-These correspond to:
-
-1. Multiple processes
-2. Multiple threads
-3. Multiplexing
-
-Processes have their own memory, so (1) is a distributed memory model. Threads share memory, so (2) is
-a shared memory model. (Multiplexing applies to a single process, so their is no memory to share).
-"""
 
 ## Asynchronous
 function do_something(t)
@@ -78,13 +63,6 @@ end
 for task_id in 1:3
     @async do_work(task_id)
 end
-
-
-# Example
-
-
-
-## Mutli-threading
 
 
 ## Multi-processing

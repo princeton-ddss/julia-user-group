@@ -3,18 +3,111 @@ Julia prides itself on being a language that excels in terms of both development
 
 Parallel programming is a case-in-point. The term "parallel programming" encompasses a wide range. Julia supports three classical parallel programming paradigms  "out-of-the-box", while the Julia ecosystem provides tightly-integrated support for recent advances, e.g., accelerators and GPUs.
 
-Before diving into Julia, let's briefly review three "classical" concurrent programming paradigms: multi-processed, multi-threaded and asynchronous computing.
+Before diving into Julia, let's briefly review three "classical" concurrent programming paradigms: multi-processed, multithreaded and asynchronous computing.
 
-## Multi-processing
-Multi-processing is the most familiar type of concurrent programming to researchers. It simply means running multiple *processes* in parallel. Processes do not share memory, so this sort of concurrency can scale to huge numbers of concurrent processes on a large cluster. On the other hand, because processes do not share memory, communication between processes is relatively slow, and their is a (relatively) high start-up cost associated with each process. For these reasons, multi-processing is generally best suited to programs that need to perform many large, independent, CPU-bound operations.
+## Multiprocessing
+Multiprocessing is the most familiar type of concurrent programming to researchers. It simply means running multiple *processes* in parallel. Processes do not share memory, so this sort of concurrency can scale to huge numbers of concurrent processes on a large cluster. On the other hand, because processes do not share memory, communication between processes is relatively slow, and their is a (relatively) high start-up cost associated with each process. For these reasons, multiprocessing is generally best suited to programs that need to perform many large, independent, CPU-bound operations.
 
-### Multi-processing in Julia
-...
+### Multiprocessing in Julia
+Multiprocessing functionality is provided by the `Distributed` module. Supplying the `-p [NUM_WORKERS]` option at start-up creates a process pool with `NUM_WORKERS` workers. You can also create or modify the pool *after* start-up using `Distributed.addprocs`.
 
-## Multi-threading
-Multi-threading is another familiar concurrent programming paradigm. As the name suggest, it uses multiple *threads* to perform actions simultaneously. Unlike processes, threads share memory space. Thus, multi-threaded programs can efficiently share/pass information between operations. On the other hand, getting access to a large number of cores *and* memory may be challenging. In addition, having shared data means having to worry about *race conditions*. Writing "thread-safe" code (i.e., code free from race conditions) is notoriously difficult.
+```shell
+julia -p 2
+```
 
-### Multi-threading in Julia
+```julia
+using Distributed
+Distributed.addprocs(2)
+```
+
+Scheduling tasks to workers is performed with either `Distributed.remotecall` or `Distributed.@spawnat`:
+```julia
+r = remotecall(rand, 2, 2, 2)
+s = @spawnat 3 1 .+ fetch(r)
+fetch(s)
+```
+While `remotecall` takes a function as its argument, `@spawnat` takes an expression. The macro creates a closure around the expression and runs the closure on the specified worker. This means that, for example, that the `fetch(r)` above is run on worker 3, not the process where `@spawnat` is called.
+
+Both `remotecall` and `@spawnat` return a `Future` object that relays information about the state of the job. You obtain the result of a computation by calling `fetch` on it. Note, however, that `fetch` blocks/waits until the result is ready. The `isready` method allows you to check if a result if ready before calling `fetch`.
+
+Processes do not, in general, directly share data. Thus, worker processes do not have access to values created by the main process and vice-a-versa. Futhermore, worker processes do not know what code is available on the main process. In order to run code with dependencies, we need a mechanism for loading code on worker processes. That ability is provided by the `@everywhere` macro.
+
+```julia
+@everywhere using DataFrames
+```
+
+The `DataFrames` module is now in scope on all worker processes (and the main process).
+
+Because data is not generally available on the process where work is scheduled, care must be taken to avoid unintended data movement. When a block of code is executed on a worker process, Julia implicitly copies values to the worker, which may or may not be what the develop intended (and can have serious performance consequences). For this reason, multiprocessing generally provides the largest speedups in cases that involve large computations and minimal back-and-forth of movement of data.
+
+#### Useful
+- `myid()` - return the executing process ID.
+- `nworkers()` - return the number of process pool workers.
+- `nprocs()` - return the number of processes, including the main process.
+- `addprocs(np::Integer=Sys.CPU_THREADS)` - launch `np` workers.
+- `rmprocs(pids)` - remote the specified workers.
+
+#### Notes
+- Workers are in addition to the main process, so the maximum worker ID is `NUM_WORKERS + 1`. You can see all these processes running if you check your activity monitor / list running processes.
+- The `-p` option automatically loads the `Distributed` module.
+- Using `-p auto` launches as many workers as logical cores available. On modern laptops, this might not be the expected number. For example, on a 12-core Mac Studio, Julia launches 8 workers because the M2 Max chips only have 8 "performance" cores (and no hyperthreading).
+
+### Example: Job Queue
+A job queue is a server that accepts requests to run programs or functions in process pool. When it receives a request, it places it in a FIFO queue. If there is a process available, the job is scheduled to run.
+
+For example, here's the RQ package:
+
+```python
+def count_words(string):
+    return len(string)
+
+q = Queue(connection=Redis())
+res = q.enqueue(count_words, 'You're a silly bean!')
+```
+
+In Julia, we can create an "internal" job queue at start-up using the `-p` option (or *after* start-up using the `Distributed.addprocs` function). But this isn't useful if we need run Julia *across* programs. Let's try re-implementing the RQ package, Julia style.
+
+```julia
+# On the first Julia REPL
+using Redis
+
+conn = RedisConnection() # requires running Redis server
+
+id = 123
+set(conn, 123, println("hello"))
+
+# On the second Julia REPL
+using Redis
+
+conn = RedisConnection()
+
+f = get(conn, 123) # typeof(f) == String
+r = @spawnat eval(Meta.parse(f))
+```
+
+Cool! With a few lines of code we have the makings of a job queue. (Okay—so we have some issues to work out in terms of code availability, but I'm sure we can figure it out 😅).
+
+### Parallel Maps
+A common use of multiprocessing is to perform map-reduce (or just map) operations. Given a problem, we break the problem into "independent" parts that can be computed in parallel, i.e., we "map" a function over the components. Then, we combine—or "reduce"—the results with another function, such as `min`, `max`, `sum`, `mean`, etc. These types of calculations are so common that Julia includes *two* high-level methods to assist you: `pmap` and the `@distributed` macro.
+
+```julia
+# sum 200000000 random bits
+res = @distributed (+) for i = 1:200000000
+    Int(rand(Bool))
+end
+
+# perform f on each element of x
+pmap(f, x)
+```
+
+Both methods only use worker processes for computation. Note that the reducer in `@distributed` is optional, but `pmap` provides a simpler interface in that case. In either case, any values used by the mapped function should be *read-only*. These values will be copied to the workers, and therefore all modifications/side effects will be local to the worker process.
+
+
+
+## Multithreading
+Multithreading is another familiar concurrent programming paradigm. As the name suggest, it uses multiple *threads* to perform actions simultaneously. Unlike processes, threads share memory space. Thus, multithreaded programs can efficiently share/pass information between operations. On the other hand, getting access to a large number of cores *and* memory may be challenging. In addition, having shared data means having to worry about *race conditions*. Writing "thread-safe" code (i.e., code free from race conditions) is notoriously difficult.
+
+### Multithreading in Julia
 - Julia provides multithreading support via the `Threads` module.
 - There are two commonly used macros: `@threads` for multithreaded for-loops and `@spawn` for running tasks on a thread.
 - In order to make use of `Threads`, we need to start Julia with a threadpool using the `-t` option:
@@ -56,6 +149,24 @@ In Julia, *you* are responsible for ensuring programs are data-race free! Julia 
 - `Threads.@spawn` - like @async, but with threads running task
     - Multiple tasks can use the same thread!
 
+# Threads
+- -p 2 -t 2 means two workers with two threads on each process
+    - Use addprocs and pass -t as exeflags for fine-grained control
+- Interactive threads?
+- `Threads.@threads for i = 1:10`
+- `Threads.@spawn` - like @async, but with threads running task
+    - Multiple tasks can use the same thread!
+
+## Data-race conditions
+- You are responsible for ensuring program is data-race free!
+- Julia Channels are thread-safe => may be used to communicate safely betwen threads
+- `ReentrantLock` provides a mechanism for safely accessing and modifying data that is used by multiple threads
+- A thread acquires the lock, does some work and then releases the lock
+- Julia prevents other threads from accessing any variable accessing while the lock is locked
+
+### Atomics (cf. Dune)
+- `Threads.Atomic` can wrap primitive types (`isprimitivetype(T) == true`)
+
 ## Asynchronous Programming
 Asynchronous programming refers to code in which the program does not stop to execute (at least some) functions. For example, a function might "pause" to fetch data from an API, return control to a main event loop, then resume to perform an action after the data finishes downloading before finally exiting. Asynchronous programming is especially useful for application development because it provides a way to "move through" IO bound operation. This soft of programming is essential for graphical interfaces and browsers, but can also be useful when optimizing any IO-bound code, i.e., coed that spends a lot of time on "blocking" actions: database queries, API calls, background jobs, disk access, GPU, etc. (Essentially anything that depends on an "external" system).
 
@@ -70,6 +181,14 @@ end
 Here, the `fetch_data` function is added to the call stack, the function runs and eventually returns to `do_something` (and is removed from the call stack). If the code that follows `fetch_data` is not entirely dependent on its result, then we need not wait for it to return before continuing `do_something`. In order for that to happen, `fetch_data` must yield control back to `do_something`. When `fetch_data` completes its IO-bound operation, `do_something` can yield control *back* to `fetch_data` in order to (e.g.) format the data before finally returning.
 
 ### Asynchronous Julia
+
+#### Highlights
+- Suppose I want to create a user interface framework. A user interface requires an *event loop*.
+- Most of the time, nothing is happening. When the user presses a button, the program performs an action. The action might pause the event loop or it might perform an asychronous action in the background. A Julia `Task` can perform actions that do not take up compute cycles "in the background", allowing the event loop to continue responding to new events while.
+- `Task`s also allow you to schedule functions in arbitrary ways because tasks can be interrupted.
+- "Switching tasks does not use any space so any number of task switches can occur without consuming the call stack."
+- Create-start-run-finish life cycle
+
 One thing that I would like to contrast (or figure out) is how Julia makes it easy or hard relatively to other languages to write this sort of code. In JavaScript and Python, they have the `async` function syntax that allows you to mark functions as running async:
 ```
 async def foo():
@@ -161,39 +280,8 @@ bind(chnl, task)
 
 In terms of thread safety, passing messages this way serves as a way to denote the "owner" of data: when a sender places a value in the channel, it gives up ownership of that data (and the eventual receiver takes ownership).
 
-
-# Asynchronous Programming
-- Suppose I want to create a user interface framework. A user interface requires an *event loop*.
-- Most of the time, nothing is happening. When the user presses a button, the program performs an action. The action might pause the event loop or it might perform an asychronous action in the background. A Julia `Task` can perform actions that do not take up compute cycles "in the background", allowing the event loop to continue responding to new events while.
-- `Task`s also allow you to schedule functions in arbitrary ways because tasks can be interrupted.
-- "Switching tasks does not use any space so any number of task switches can occur without consuming the call stack."
-- Create-start-run-finish life cycle
-
-## Channels
-- Julia uses channels to communicate between tasks, threads and processes.
-- `Channel` is a waitable FIFO queue.
-- Multiple tasks and connect to either end of the channel.
-- Listeners and wait for values.
-- 
-
-# Threads
-- -p 2 -t 2 means two workers with two threads on each process
-    - Use addprocs and pass -t as exeflags for fine-grained control
-- Interactive threads?
-- `Threads.@threads for i = 1:10`
-- `Threads.@spawn` - like @async, but with threads running task
-    - Multiple tasks can use the same thread!
-
-## Data-race conditions
-- You are responsible for ensuring program is data-race free!
-- Julia Channels are thread-safe => may be used to communicate safely betwen threads
-- `ReentrantLock` provides a mechanism for safely accessing and modifying data that is used by multiple threads
-- A thread acquires the lock, does some work and then releases the lock
-- Julia prevents other threads from accessing any variable accessing while the lock is locked
-
-### Atomics (cf. Dune)
-- `Threads.Atomic` can wrap primitive types (`isprimitivetype(T) == true`)
-
-### Warning
-`threadid` cannot be considered constant per task because the task could be moved to a different thread is it yields
-    - The `:static` option for `@threads` freezes the thread ID
+## External Packages
+In addition to the built-in support, there are a number of popular and useful community packages. Here are a few you may find useful:
+- Dagger.jl
+- CUDA.jl
+- Metal.jl
