@@ -77,16 +77,10 @@ Scheduling jobs to workers is performed with either `Distributed.remotecall` or 
 "
 
 # ╔═╡ 8663b8e7-fa7b-441c-b69b-d7b17ec2e257
-# ╠═╡ disabled = true
-#=╠═╡
 x = remotecall(rand, 2, 3)
-  ╠═╡ =#
 
 # ╔═╡ c85acf75-1a6d-4d38-91d5-70dc3c751953
-# ╠═╡ disabled = true
-#=╠═╡
 y = @spawnat 2 1 .+ fetch(x)
-  ╠═╡ =#
 
 # ╔═╡ 65bc4185-3f82-4898-a813-16ccebb2d40a
 md"
@@ -99,10 +93,7 @@ You can check on the state of a `Future` using `isready`:
 "
 
 # ╔═╡ 5a878a26-3633-4814-955c-cd39fdebe27e
-# ╠═╡ disabled = true
-#=╠═╡
 isready(x)
-  ╠═╡ =#
 
 # ╔═╡ 0f50794a-8e0a-4f50-bd34-128824a07feb
 md"
@@ -110,10 +101,7 @@ Alternatively, you can wait for the `Future` to finish and obtain its returned v
 "
 
 # ╔═╡ 93a6b5ff-e821-4ae5-9ae8-1e04c5a8dbde
-# ╠═╡ disabled = true
-#=╠═╡
 fetch(x)
-  ╠═╡ =#
 
 # ╔═╡ 73d7b124-835c-4dee-a4cb-bf2a2d8949f5
 md"
@@ -245,7 +233,7 @@ Because the return of `Threads.@spawn` is a (started) `Task`, we can wait for it
 
 # ╔═╡ c8c71e29-a825-4413-99b6-2fce7adf1b30
 md"
-### @threads to the rescue
+### @threads is your friend
 
 As with multiprocessing, one of the most common use cases of multithreading is to run parallel for-loops. `Threads.@threads` macro is our hero in this case:
 "
