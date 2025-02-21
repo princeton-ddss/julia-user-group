@@ -224,12 +224,18 @@ md"
 Once we have a function defined, running it in a thread is trivial:
 "
 
+# ╔═╡ 59dc3e16-3743-4d90-bcc6-9ff85071611b
+t3 = Threads.@spawn im_only_sleeping_take(3)
+
 # ╔═╡ ab962e49-b52b-409f-b072-b25b2e31989e
 md"
 The `Threads.@spawn` macro creates a `Task` and immediately schedules it to run in an available thread. How is this different from the `@async` coroutines (discussed below)? The task is scheduled to run *in parallel* on a thread, whereas the coroutine is scheduled to run interleaved with other tasks on a single process. Thus, the usefulness of multithreaded tasks is *not* restricted to I/O bound operations.
 
 Because the return of `Threads.@spawn` is a (started) `Task`, we can wait for it or fetch its results the same as with coroutines.
 "
+
+# ╔═╡ f9d68ac9-bbeb-4bc8-8fe7-fb4913f57ed5
+fetch(t3)
 
 # ╔═╡ c8c71e29-a825-4413-99b6-2fce7adf1b30
 md"
@@ -343,12 +349,6 @@ function im_only_sleeping_take(n::Int)
 	sleep(n)
 	return "Wakey wakey!"
 end
-
-# ╔═╡ 59dc3e16-3743-4d90-bcc6-9ff85071611b
-t3 = Threads.@spawn im_only_sleeping_take(3)
-
-# ╔═╡ f9d68ac9-bbeb-4bc8-8fe7-fb4913f57ed5
-fetch(t3)
 
 # ╔═╡ e7cd09c8-13d1-4132-bd5f-a163a8448679
 md"
