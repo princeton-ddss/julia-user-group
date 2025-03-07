@@ -1,4 +1,4 @@
-# Concurrent Julia
+# Concurrency with Julia
 
 ## Introduction
 Julia prides itself on being a language that excels in terms of both development time and runtime. Researchers can write code that runs fast with minimal effort. One reason that Julia is fast for development is that there are few choices to make when it comes time to selecting packages, and, in many cases, no package is required because the Julia development team has prioritizes, builds and includes essential functionality for research developers in `Base`.
