@@ -23,7 +23,7 @@ email: colinswaney@princeton.edu
 description: >- # this means to ignore newlines until "baseurl:"
   The home of the Princeton University Julia User Group.
 domain: "princeton-ddss.github.io"
-baseurl: "/julia-user-group/" # the subpath of your site, e.g. /blog
+baseurl: "/julia-user-group" # the subpath of your site, e.g. /blog
 url: "https://princeton-ddss.github.io" # the base hostname & protocol for your site, e.g. http://example.com
 
 # Build settings
