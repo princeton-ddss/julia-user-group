@@ -1,6 +1,7 @@
 ---
 layout: post
 title:  "Julia on HPC"
+author: Luca Bonaldo
 date:   2024-11-15 08:37:24 -0500
 categories: meetings talks
 preview: false

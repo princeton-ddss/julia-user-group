@@ -1,6 +1,7 @@
 ---
 layout: post
 title:  "Julia Packaging: Script to Registry in (about) an Hour"
+author: Luca Bonaldo
 date:   2025-02-21 10:00:00 -0500
 categories: meetings talks
 preview: false
