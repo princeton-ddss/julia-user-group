@@ -25,6 +25,7 @@ description: >- # this means to ignore newlines until "baseurl:"
 domain: "princeton-ddss.github.io"
 baseurl: "/julia-user-group" # the subpath of your site, e.g. /blog
 url: "https://princeton-ddss.github.io" # the base hostname & protocol for your site, e.g. http://example.com
+future: true
 
 # Build settings
 theme: minima
